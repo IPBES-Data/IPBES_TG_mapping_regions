@@ -67,11 +67,17 @@ format:
         code-summary: 'Show the code'
 ---
 
-```{r setup, include=FALSE}
+```{r}
+#| label: setup
+#| include: false
+
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-```{r, echo=FALSE}
+```{r}
+#| label: logo
+#| echo: false
+
 htmltools::img(src = knitr::image_uri("C:/Users/jkumagai/Documents/IPBES/R/Geoinformatics/Technical Guidelines Series/Mapping Guidelines v2/logo2.png"), 
                alt = 'logo', 
                style = 'position:absolute; top:0; right:0; padding:10px; width: 600px; height: 135px;') 
@@ -94,7 +100,11 @@ The guide will show how to aggregate and map FAO data according to the IPBES Reg
 
 Let's begin by loading the following packages. 
 
-```{r message = FALSE, warning=FALSE}
+```{r}
+#| label: load_packages
+#| message: false
+#| warning: false
+
 library(sf) 
 library(dplyr)
 library(magrittr)
