@@ -71,12 +71,13 @@ format:
 #| label: setup
 #| include: false
 
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval = FALSE)
 ```
 
 ```{r}
 #| label: logo
 #| echo: false
+#| eval: false
 
 htmltools::img(src = knitr::image_uri("C:/Users/jkumagai/Documents/IPBES/R/Geoinformatics/Technical Guidelines Series/Mapping Guidelines v2/logo2.png"), 
                alt = 'logo', 
@@ -121,6 +122,7 @@ library(graticule) # for mapping
 The first step is to download the FAO data using the FAOSTAT package. The url can be found in FAO STAT's data description file [here.](http://fenixservices.fao.org/faostat/static/bulkdownloads/datasets_E.xml)  
 
 ```{r}
+#| label: download_faostat_population
 FAOSTAT::download_faostat_bulk("http://fenixservices.fao.org/faostat/static/bulkdownloads/Population_E_All_Data_(Normalized).zip", getwd())
 ```
 
@@ -132,7 +134,10 @@ To download the shapefile manually, please go to the [IPBES Regions and Sub-Regi
 
 To do this through a script, first identify the record ID of the Zenodo entry, which is the numbers following "*zenodo.*" at the end of the URL. We then create a URL with the record ID and query the API for information about the record.  
 
-```{r collapse=TRUE, message='hide'}
+```{r}
+#| label: zenodo_record_meta
+#| collapse: true
+#| message: false
 recordID <- "3923633"
 url_record <- paste0("https://zenodo.org/api/records/", recordID)
 record <- httr::GET(url_record)
@@ -141,13 +146,20 @@ record # Status 200 indicates a successful download
 
 Now, we can inspect the contents downloaded with the function content()  
 ```{r}
+#| label: view_zenodo_content
+#| eval: false
+
+
 View(content(record)) # view displays the output in a human readable form within R Studio
 ```
 
 ![The picture above shows the resulting R Studio window which displays what was downloaded in a human readable form.](C:/Users/jkumagai/Documents/IPBES/R/Geoinformatics/Technical Guidelines Series/Mapping Guidelines v2/view_content_zendodo_record.png)
   
 This information we received contains metadata for the record, and within this we can find the specific URL to download the IPBES regions and sub-regions shapefile. We then use this URL and the function GET() to download the shapefile.  
-```{r collapse=TRUE, message='hide'}
+```{r}
+#| label: download_ipbes_shapefile
+#| collapse: true
+#| message: false
 # Contains the url to download the shapefile
 url_shape <- content(record)$files[[5]]$links$download 
 
@@ -159,6 +171,7 @@ unzip("ipbes_regions_subregions.zip") # unzips shapefile
 Now that our data is on our computer, we need to upload the data into R studio and project the spatial data.  
   
 ```{r}
+#| label: read_faostat_and_shapefile
 pop_raw <- FAOSTAT::read_faostat_bulk("Population_E_All_Data_(Normalized).zip") # load the population data using FAOSTAT's built in function 
 shape <- sf::st_read("IPBES_Regions_Subregions2.shp") # shapefile
 ```
@@ -166,12 +179,14 @@ shape <- sf::st_read("IPBES_Regions_Subregions2.shp") # shapefile
 We chose to project the data into the Robinson projection as it minimizes distortions in both area and distance. To find the proj4 notation please visit [this link](https://epsg.io/54030).    
   
 ```{r}
+#| label: set_robinson_projection
 crs_robin <-  "+proj=robin +lon_0=0 +x_0=0 +y_0=0 +datum=WGS84 +units=m +no_defs"
 shape <- sf::st_transform(shape, crs_robin)
 ```
    
 To plot the ocean in our maps, we will also download ocean data from the rnaturalearth package and project it  
 ```{r}
+#| label: prepare_ocean_data
 ocean <- rnaturalearth::ne_download(scale = 10, type = 'ocean', category = 'physical', returnclass = "sf")
 ocean <- sf::st_transform(ocean, crs = crs_robin) # changes the projection
 ocean <- ocean[,1]
@@ -180,6 +195,7 @@ ocean <- ocean[,1]
 ### III. Cleaning the data  
 The next important step is to clean the data to ensure it can be joined and mapped easily. For this example, we will filter to only include the total population for each country in 2018.    
 ```{r}
+#| label: filter_population_2018
 pop_2018 <- pop_raw %>% 
   dplyr::filter(element == "Total Population - Both sexes" &
            year == 2018) %>% 
@@ -193,13 +209,16 @@ pop_2018 <- pop_raw %>%
   
 By examining the Area names within the dataset, one will notice that every name after Zimbabwe refers to aggregated data, therefore we will remove these from our analysis.
 ```{r}
+#| label: remove_aggregated_records
 tail(pop_2018$area, 34)
 pop_2018 <- pop_2018[1:237, ] # Selects the first 237 records, thus removing the last 34 which are aggregated data
 ```
     
 Finally, we need to add the ISO3 codes onto the dataframe, so we can easily join it to the IPEBS Regions and Sub-Regions data. The translateCountryCode() function provided by the FAOSTAT package allows us to easily do this.   
 
-```{r collapse=TRUE}
+```{r}
+#| label: add_iso3_codes
+#| collapse: true
 pop_2018 <- FAOSTAT::translateCountryCode(data = pop_2018, from = "FAOST_CODE", to = "ISO3_CODE", "area_code") # Add's the ISO Code to the data
 ```
     
@@ -207,6 +226,7 @@ There are two records where no ISO3 Code was assigned: China (including mainland
   
 For South Sudan, we will add the same ISO-3 Code we have in the IPBES Regions and Sub-regions dataset.   
 ```{r}
+#| label: fix_missing_iso3
 pop_2018[230,2] <- "SSD" # South Sudan
 pop_2018 <- na.omit(pop_2018) # removes China (including other areas)
 ```
@@ -216,6 +236,7 @@ We have all of our data downloaded locally, uploaded into R, and formatted prope
   
 First, we join the IPBES regions and sub-regions attributes to our data table. I drop the spatial attributes of the IPBES regions and sub-regions dataset to speed up the process.   
 ```{r}
+#| label: join_ipbes_attributes
 colnames(shape)[2] <- "ISO3_CODE" 
 regions <- shape %>%   
   as.data.frame() %>% # drops the spatial attributes
@@ -227,6 +248,7 @@ pop_2018 <- dplyr::left_join(x = pop_2018, y = regions, by = "ISO3_CODE") %>% # 
     
 Secondly, we aggregate the data per IPBES regions and sub-regions. In our example, I calculate the total population per region and per sub-region using the group_by() function.   
 ```{r}
+#| label: aggregate_population
 pop_2018 <- pop_2018 %>% 
   dplyr::group_by(Region) %>% # Grouping by regions
   dplyr::mutate(region_pop = sum(value)/1000) %>% # calculates total population (millions) per region
@@ -239,6 +261,7 @@ pop_2018
     
 Finally, we join the formatted FAO data to the spatial data we originally had so we can create maps. 
 ```{r}
+#| label: join_to_spatial
 data <- dplyr::full_join(x = shape, y = pop_2018, by = "ISO3_CODE")
 ```
   
@@ -246,6 +269,7 @@ data <- dplyr::full_join(x = shape, y = pop_2018, by = "ISO3_CODE")
   
 All that is left to do is to map the data per region and sub-region. We begin by dissolving the spatial data per region and subregion so country borders are not included.    
 ```{r}
+#| label: dissolve_geometries
 data_region <- data %>% # this dissolves the data by region
   dplyr::group_by(Region.x) %>% 
   dplyr::summarise(region_pop2 = sum(value, na.rm = T)/1000) %>% 
@@ -259,6 +283,7 @@ data_subregion <- data %>% # this dissolves the data by subregion
   
 Now, we choose the palette and plot by region.   
 ```{r}
+#| label: plot_regions
 data_region$region_pop2 <- as.character(round(data_region$region_pop2 )) # Treats the values as groups so the legend displays correctly 
 data_region$region_pop2[5] <- "0927" # Ensures the legend displays correctly
 
@@ -270,7 +295,10 @@ plot(data_region[,2], pal = palette, main = "Total population (millions) in 2018
 ```
    
 If you would like to add graticules and an ocean background, follow this example. First, we will set up the graticules we will plot   
-```{r message = FALSE, warning = FALSE}
+```{r}
+#| label: create_graticules
+#| message: false
+#| warning: false
 # Creates latitude and longitude labels and graticules
 lat <- c(-90, -60, -30, 0, 30, 60, 90)
 long <- c(-180, -120, -60, 0, 60, 120, 180)
@@ -280,6 +308,7 @@ lines <- graticule::graticule(lons = long, lats = lat, proj = crs_robin) # grati
    
 Then, we will plot the graticules, ocean data, then region data, and finally the text for latitude and longitude lines, legend, and surrounding box.   
 ```{r}
+#| label: plot_regions_with_graticules
 par(mar = c(2,3,1,2)) # Adjusts the edges of the frame 
 plot(lines, lty = 5, col = "lightgrey",  main = "Total population (millions) in 2018 per region") # plots graticules 
 plot(ocean, col = ggplot2::alpha("slategray1", 0.3), add = TRUE) 
@@ -295,6 +324,7 @@ box(which = "plot", lty = "solid") # Map frame
    
 We can also plot by subregion.  
 ```{r}
+#| label: plot_subregions
 plot(data_subregion[,2], main = "Total population (millions) in 2018 per sub-region", breaks = "quantile")
 ```
    
